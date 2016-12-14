@@ -1,0 +1,40 @@
+apply plugin: 'kotlin'
+
+
+
+buildscript {
+
+    ext {
+        kotlin_version = '1.0.5'
+        kafka_version = '0.10.1.0-cp2'
+        confluent_version = '3.1.1'
+        kafka_scala_version = '2.11'
+        avro_version = '1.7.7'
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${kotlin_version}"
+    }
+
+}
+
+repositories {
+    maven { url "http://packages.confluent.io/maven/" }
+    mavenCentral()
+}
+
+
+dependencies {
+    compile "org.jetbrains.kotlin:kotlin-stdlib:${kotlin_version}"
+    compile "org.apache.kafka:kafka-clients:${kafka_version}:test"
+    compile "org.apache.kafka:kafka-streams:${kafka_version}"
+    compile "org.apache.kafka:kafka-streams:${kafka_version}:test"
+    compile "io.confluent:kafka-avro-serializer:${confluent_version}"
+    compile "org.apache.avro:avro:${avro_version}"
+    testCompile 'junit:junit:4.12'
+
+}
