@@ -1,4 +1,4 @@
-package moip.kafkautils.serde;
+package json;
 
 import com.google.gson.*;
 import org.apache.commons.lang3.StringUtils;

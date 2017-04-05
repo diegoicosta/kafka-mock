@@ -10,7 +10,7 @@ import java.util.Collections;
 import java.util.Map;
 
 /**
- * Created by gabriel on 05/12/16.
+ * Created by diegoicosta on 28/10/16
  */
 public class SpecificAvroSerde<T extends org.apache.avro.specific.SpecificRecord> implements Serde<T> {
 

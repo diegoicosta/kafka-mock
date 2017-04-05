@@ -1,4 +1,4 @@
-package moip.kafkautils.serde;
+package json;
 
 import com.google.gson.GsonBuilder;
 import org.apache.kafka.common.serialization.Serializer;
