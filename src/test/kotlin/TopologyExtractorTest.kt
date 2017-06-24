@@ -1,5 +1,5 @@
-import moip.teste.infra.MetaTopology
-import moip.teste.infra.MockedKafka
+import moip.mockedk.MetaTopology
+import moip.mockedk.MockedKafka
 import org.apache.kafka.common.serialization.IntegerSerializer
 import org.apache.kafka.common.serialization.Serdes
 import org.apache.kafka.common.serialization.StringSerializer
