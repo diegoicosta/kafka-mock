@@ -1,5 +1,6 @@
 package moip.mockedk
 
+import org.apache.kafka.common.serialization.Deserializer
 import org.apache.kafka.common.serialization.Serializer
 import org.apache.kafka.streams.StreamsConfig
 import org.apache.kafka.streams.processor.TopologyBuilder
@@ -10,35 +11,13 @@ import java.util.*
 /**
  * Created by diegoicosta on 12/10/16.
  */
-class DataStream<K, V> {
+class MockedKafka {
 
-    data class KeyValue<K, V>(val key: K, val value: V)
-
-    private val list: MutableList<KeyValue<K, V>> = mutableListOf()
-
-    fun add(key: K, value: V): DataStream<K, V> {
-        list.add(KeyValue(key, value))
-        return this
-    }
-
-    fun getStreamList(): List<KeyValue<K, V>> {
-        return list.toList()
-    }
-
-    fun serialize(keySerializer: Serializer<K>, valueSerializer: Serializer<V>): DataStream<ByteArray, ByteArray> {
-        val byteList: DataStream<ByteArray, ByteArray> = DataStream()
-
-        for (item in this.list) {
-            byteList.add(keySerializer.serialize("", item.key), valueSerializer.serialize("", item.value))
-        }
-
-        return byteList
+    fun apply(topology: TopologyBuilder): InputStream {
+        val extractor = MetaTopology(topology)
+        return InputStream(extractor)
     }
 }
-
-class EmptySinkError(msg: String) : RuntimeException(msg)
-class NoMatchResult(msg: String) : RuntimeException(msg)
-
 
 class InputStream(private val topologyExtractor: MetaTopology) {
 
@@ -52,10 +31,9 @@ class InputStream(private val topologyExtractor: MetaTopology) {
 
 class SourceSerializer<K : Any, V : Any>(private val inputs: DataStream<K, V>, private val topology: MetaTopology) {
 
-    fun serializedBy(keySerializer: Serializer<K>, valueSerializer: Serializer<V>): OutputStream {
-        val byteInput = inputs.serialize(keySerializer, valueSerializer)
-
-        return OutputStream(topology, byteInput)
+    fun serializedBy(keySerializer: Serializer<K>, valueSerializer: Serializer<V>): OutputStream<K, V> {
+        inputs.serialize(keySerializer, valueSerializer)
+        return OutputStream(topology, inputs)
     }
 
     fun input(key: K, value: V): SourceSerializer<K, V> {
@@ -64,51 +42,79 @@ class SourceSerializer<K : Any, V : Any>(private val inputs: DataStream<K, V>, p
     }
 }
 
-class OutputStream(private val topologyExtractor: MetaTopology, private val input: DataStream<ByteArray, ByteArray>) {
+class OutputStream<K : Any, V : Any>(private val topologyExtractor: MetaTopology, private val input: DataStream<K, V>) {
 
     val LOG = LoggerFactory.getLogger(OutputStream::class.java)
 
-    fun <K : Any, V : Any> output(key: K, value: V): SinkSerializer<K, V> {
-        val output = DataStream<K, V>().add(key, value)
+    fun <K2 : Any, V2 : Any> output(key: K2, value: V2): SinkSerializer<K, V, K2, V2> {
+        val output = DataStream<K2, V2>().add(key, value)
         return SinkSerializer(input, output, topologyExtractor)
     }
 
 }
 
+class DataStream<K, V> {
 
-class SinkSerializer<K, V>(private val input: DataStream<ByteArray, ByteArray>, private val output: DataStream<K, V>, private val topology: MetaTopology) {
+    data class KeyValue<K, V>(val key: K, val value: V)
 
-    fun serializedBy(keySerializer: Serializer<K>, valueSerializer: Serializer<V>) {
-        val outputBytes = output.serialize(keySerializer, valueSerializer)
+    private val list: MutableList<KeyValue<K, V>> = mutableListOf()
+    private val byteList: MutableList<KeyValue<ByteArray, ByteArray>> = mutableListOf()
 
+    fun add(key: K, value: V): DataStream<K, V> {
+        list.add(KeyValue(key, value))
+        return this
+    }
+
+    fun geSerializedList(): List<KeyValue<ByteArray, ByteArray>> {
+        return byteList.toList()
+    }
+
+    fun geDeserializedList(): List<KeyValue<K, V>> {
+        return list.toList()
+    }
+
+    fun serialize(keySerializer: Serializer<K>, valueSerializer: Serializer<V>) {
+        for (item in this.list) {
+            byteList.add(KeyValue(keySerializer.serialize("", item.key), valueSerializer.serialize("", item.value)))
+        }
+    }
+
+}
+
+class EmptySinkError(msg: String) : RuntimeException(msg)
+class NoMatchResult(msg: String) : RuntimeException(msg)
+
+class SinkSerializer<K1, V1, K2, V2>(private val input: DataStream<K1, V1>, private val output: DataStream<K2, V2>, private val topology: MetaTopology) {
+
+    fun deserializedBy(keyDeserializer: Deserializer<K2>, valueDeserializer: Deserializer<V2>) {
 
         val props = Properties()
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "mocked-${UUID.randomUUID()}")
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
         val driver = ProcessorTopologyTestDriver(StreamsConfig(props), topology.topology)
 
-        for (i in input.getStreamList()) {
+        for (i in input.geSerializedList()) {
             driver.process(topology.sourceTopic, i.key, i.value)
         }
 
-        for (out in outputBytes.getStreamList()) {
+        for (out in output.geDeserializedList()) {
             val record = driver.readOutput(topology.sinkTopic)
 
             record ?: throw EmptySinkError("topic '${topology.sinkTopic}' is empty")
-            if (!Arrays.equals(out.value, record.value())
-                    || !Arrays.equals(out.key, record.key())
-                    ) {
 
-                //print("diff: ${String(out.value)} - ${String(record.value())}")
-               // print("diff: ${(out.value)} - ${(record.value())}")
+            val recOutKey = keyDeserializer.deserialize("", record.key())
+            val recOutVal = valueDeserializer.deserialize("", record.value())
+
+            if ( recOutKey != out.key || recOutVal != out.value) {
                 throw NoMatchResult("topic '${topology.sinkTopic}' has a different key/value")
             }
+
         }
 
     }
 
 
-    fun output(key: K, value: V): SinkSerializer<K, V> {
+    fun output(key: K2, value: V2): SinkSerializer<K1, V1, K2, V2> {
         output.add(key, value)
         return this
     }
@@ -116,15 +122,8 @@ class SinkSerializer<K, V>(private val input: DataStream<ByteArray, ByteArray>, 
 }
 
 data class MetaTopology(val topology: TopologyBuilder) {
-    val sourceTopic: String = topology.sourceTopics().last()
+    val sourceTopic = topology.build(null).sourceTopics().last()
+    //    val sourceTopic: String = topology.sourceTopics().last()  older k-stream version
     val sinkTopic: String = topology.build(null).sinkTopics().last()
 }
 
-
-class MockedKafka {
-
-    fun apply(topology: TopologyBuilder): InputStream {
-        val extractor = MetaTopology(topology)
-        return InputStream(extractor)
-    }
-}

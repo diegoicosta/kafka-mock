@@ -1,8 +1,6 @@
 import moip.mockedk.MetaTopology
 import moip.mockedk.MockedKafka
-import org.apache.kafka.common.serialization.IntegerSerializer
-import org.apache.kafka.common.serialization.Serdes
-import org.apache.kafka.common.serialization.StringSerializer
+import org.apache.kafka.common.serialization.*
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.KStreamBuilder
 import org.junit.Assert.assertEquals
@@ -55,7 +53,7 @@ class TopologyExtractorTest {
                 .input("key-01", 1000).input("key-02", 2000)
                 .serializedBy(keySerializer = StringSerializer(), valueSerializer = IntegerSerializer())
                 .output(1000, "key-01").output(2000, "key-02")
-                .serializedBy(keySerializer = IntegerSerializer(), valueSerializer = StringSerializer())
+                .deserializedBy(keyDeserializer = IntegerDeserializer(), valueDeserializer = StringDeserializer())
 
     }
 

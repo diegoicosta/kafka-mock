@@ -21,7 +21,7 @@ public class StatefullExamples {
         builder.stream(keySerde, entrySerde, "topic-01")
                 .map((key, value) -> new KeyValue<String, Entry>(value.getAccount(), value))
                 .groupByKey()
-                .aggregate(()-> new EntrySum(null,0),
+                .aggregate(()-> new EntrySum(null,0L),
                         (aggKey, value, aggregate) -> {
                             aggregate.add(value.getAmount());
                             return aggregate;

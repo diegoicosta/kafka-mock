@@ -6,10 +6,12 @@ import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig
 import json.Entry
 import json.GenericJsonSerde
+import json.GsonDeserializer
 import json.GsonSerializer
-import org.apache.kafka.common.serialization.IntegerSerializer
+import org.apache.kafka.common.serialization.IntegerDeserializer
 import org.apache.kafka.common.serialization.Serdes
 import org.apache.kafka.common.serialization.Serdes.StringSerde
+import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.streams.StreamsConfig
 import org.apache.kafka.streams.kstream.KStreamBuilder
@@ -28,21 +30,19 @@ class MockedKafkaTest {
     val avroSerde = createAvroSerde()
 
 
+    @Test
+    fun testSimpleAvroTopologyMocked() {
 
-@Test
-@Ignore(value = "avro Byte[] comparison is failing even when objects have the same value")
-fun testSimpleAvroTopologyMocked() {
+        val avroSerializer = avroSerde.serializer()
+        val avroDeserializer = avroSerde.deserializer()
 
-  val avroSerializer = avroSerde.serializer()
-
-  MockedKafka()
-          .apply(avroSimpleTopology())
-          .input(key = "key-01", value = Balance(1977L))
-          .serializedBy(StringSerializer(), avroSerializer)
-          .output(key = "key-01", value = Balance(1977L))
-          .serializedBy(StringSerializer(), avroSerializer)
-}
-
+        MockedKafka()
+                .apply(avroSimpleTopology())
+                .input(key = "key-01", value = Balance(1977L))
+                .serializedBy(StringSerializer(), avroSerializer)
+                .output(key = "key-01", value = Balance(1977L))
+                .deserializedBy(StringDeserializer(), avroDeserializer)
+    }
 
 
     private fun avroSimpleTopology(): TopologyBuilder {
@@ -59,19 +59,19 @@ fun testSimpleAvroTopologyMocked() {
     }
 
 
-@Test
-fun testAvroTopologyDirectly() {
+    @Test
+    fun testAvroTopologyDirectly() {
 
-  val props = Properties()
-  props.put(StreamsConfig.APPLICATION_ID_CONFIG, "mocked-${UUID.randomUUID()}")
-  props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
-  val driver = ProcessorTopologyTestDriver(StreamsConfig(props), avroSimpleTopology())
+        val props = Properties()
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "mocked-${UUID.randomUUID()}")
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
+        val driver = ProcessorTopologyTestDriver(StreamsConfig(props), avroSimpleTopology())
 
-  val value = avroSerde.serializer().serialize("topic-01", Balance(1977L))
-  val key = StringSerializer().serialize("topic-01", "key-123")
+        val value = avroSerde.serializer().serialize("topic-01", Balance(1977L))
+        val key = StringSerializer().serialize("topic-01", "key-123")
 
-  driver.process("topic-01", key, value)
-}
+        driver.process("topic-01", key, value)
+    }
 
 
     private fun createAvroSerde(): SpecificAvroSerde<Balance> {
@@ -98,7 +98,6 @@ fun testAvroTopologyDirectly() {
 
         return builder
     }
-
 
 
     private fun jsonSimpleTopology(): TopologyBuilder {
@@ -152,7 +151,7 @@ fun testAvroTopologyDirectly() {
                 .input(key = "key-01", value = "value-01")
                 .serializedBy(StringSerializer(), StringSerializer())
                 .output("key-01", "value-01")
-                .serializedBy(StringSerializer(), StringSerializer())
+                .deserializedBy(StringDeserializer(), StringDeserializer())
 
     }
 
@@ -163,7 +162,7 @@ fun testAvroTopologyDirectly() {
                 .input(key = "key-01", value = "value-01")
                 .serializedBy(StringSerializer(), StringSerializer())
                 .output("key-01", "value-01")
-                .serializedBy(StringSerializer(), StringSerializer())
+                .deserializedBy(StringDeserializer(), StringDeserializer())
     }
 
     @Test
@@ -173,7 +172,7 @@ fun testAvroTopologyDirectly() {
                 .input(key = "key-01", value = "value-01").input("key-02", "value-02")
                 .serializedBy(StringSerializer(), StringSerializer())
                 .output("key-01", "value-01").output("key-02", "value-02")
-                .serializedBy(StringSerializer(), StringSerializer())
+                .deserializedBy(StringDeserializer(), StringDeserializer())
     }
 
     @Test
@@ -183,20 +182,21 @@ fun testAvroTopologyDirectly() {
                 .input(key = "key-01", value = "value-01").input("key-02", "value-02")
                 .serializedBy(StringSerializer(), StringSerializer())
                 .output("key-01", 1)
-                .serializedBy(StringSerializer(), IntegerSerializer())
+                .deserializedBy(StringDeserializer(), IntegerDeserializer())
     }
 
     @Test
     fun jsonTopologyTest() {
+        val entryDeser = GsonDeserializer<Entry>(Entry::class.java)
         val entrySer = GsonSerializer<Entry>()
-        val entry = Entry(account = "MPA-001", id = "ENT-001", fee = 3L, amount = 133L)
+        val entry = Entry("ENT-001", "MPA-001", 133L, 33L)
 
         MockedKafka()
                 .apply(jsonSimpleTopology())
                 .input(key = "key-01", value = entry)
                 .serializedBy(StringSerializer(), entrySer)
                 .output("key-01", entry)
-                .serializedBy(StringSerializer(), entrySer)
+                .deserializedBy(StringDeserializer(), entryDeser)
     }
 
 }
